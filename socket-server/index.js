@@ -99,7 +99,7 @@ const sendImagesToFlaskAPI = async (jogadores, player1ImagePath, player2ImagePat
     formData.append('images', fs.createReadStream(player1ImagePath), { filename: 'img1.jpg', contentType: 'image/jpeg' });
     formData.append('images', fs.createReadStream(player2ImagePath), { filename: 'img2.jpg', contentType: 'image/jpeg' });
 
-    const response = await axios.post('https://e7b7-34-125-44-12.ngrok-free.app/play', formData, {
+    const response = await axios.post('https://d14b-34-19-101-237.ngrok-free.app/play', formData, {
       headers: formData.getHeaders( ),
     }); 
 

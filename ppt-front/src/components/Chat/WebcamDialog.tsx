@@ -66,7 +66,8 @@ export function WebcamDialog({ onCapture }: WebcamDialogProps) {
               ref={webcamRef}
               screenshotFormat="image/jpeg"
               width={1280}
-              height={720 }
+              height={720}
+              mirrored={true}
               videoConstraints={videoConstraints}
             />
           </AlertDialogDescription>

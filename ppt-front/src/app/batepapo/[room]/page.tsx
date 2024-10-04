@@ -79,7 +79,7 @@ export default function ChatBox({ params }: Props) {
 
       {imageFile && (
         <div className="my-4">
-          <img src={URL.createObjectURL(imageFile)} alt="Preview" className="w-72 h-72" />
+          <img src={URL.createObjectURL(imageFile)} alt="Preview" className="w-full h-56" />
         </div>
       )}
 

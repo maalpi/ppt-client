@@ -4,16 +4,19 @@ const { Server } = require("socket.io");
 const FormData = require('form-data');
 const app = express();
 const fs = require('fs');
+const { v4: uuidv4 } = require('uuid');
+const path = require('path');
 const axios = require('axios');
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*", // Permitir todas as origens. Em produção, restrinja conforme necessário.
+    origin: "*",
     methods: ["GET", "POST"],
   }
 });
 
-let onlineUsers = {}; // Usado para armazenar usuários conectados
+let onlineUsers = {};
 let images = {};
 
 io.on("connection", (socket) => {
@@ -60,64 +63,65 @@ io.on("connection", (socket) => {
 
   });
   
-let userGame = []; // Para armazenar os nomes dos jogadores
+  let userGame = [];
 
-socket.on("image", ({ roomId, content, fileName }) => {
-  const username = onlineUsers[socket.id]; // Pegue o nome do usuário usando socket.id
+  socket.on("image", async ({ roomId, content, fileName }) => {
+    const username = onlineUsers[socket.id];
+    
+    if (username) {
+      console.log(`[${username}]: imagem recebida`);
+      userGame.push(username);
 
-  if (username) {
-    console.log(`[${username}]: imagem recebida`);
-    userGame.push(username); // Adiciona o nome do jogador ao array
+      // Gerar um nome de arquivo único
+      const uniqueFileName = `${uuidv4()}-${fileName}`;
+      const filePath = path.join(__dirname, uniqueFileName);
 
-    // Salvar a imagem diretamente
-    const filePath = `./${fileName}`;
-    fs.writeFileSync(filePath, Buffer.from(content));
+      // Salvar a imagem
+      fs.writeFileSync(filePath, Buffer.from(content));
+      images[username] = filePath;
 
-    // Armazenar o caminho da imagem do jogador
-    images[username] = filePath;
-
-    // Verificar se ambos os jogadores enviaram as imagens
-    if (Object.keys(images).length === 2) {
-      // Ambos os jogadores enviaram as imagens, enviar para a API Flask
-      const player1 = userGame[0];
-      const player2 = userGame[1];
-      console.log(images);
-      sendImagesToFlaskAPI(Object.keys(images), images[Object.keys(images)[0]], images[Object.keys(images)[1]], roomId);
-
-      // Limpar o objeto de imagens e o array de jogadores para a próxima rodada
-      images = {};
-      userGame = []; // Reinicie o array de jogadores
+      // Verificar se ambos os jogadores enviaram as imagens
+      if (Object.keys(images).length === 2) {
+        console.log(images);
+        console.log('playsUsegames',userGame);
+        await sendImagesToFlaskAPI(Object.keys(images), images[Object.keys(images)[0]], images[Object.keys(images)[1]], roomId);
+        images = {}; // Limpar as imagens
+        userGame = []; // Reiniciar os jogadores
+      }
     }
-  }
-});
+  });
 
-const sendImagesToFlaskAPI = async (jogadores, player1ImagePath, player2ImagePath, roomId) => {
-  try {
-    console.log('player1 :', jogadores[0])
-    console.log('player2 :', jogadores[1])
-    const formData = new FormData();
-    formData.append('images', fs.createReadStream(player1ImagePath), { filename: 'img1.jpg', contentType: 'image/jpeg' });
-    formData.append('images', fs.createReadStream(player2ImagePath), { filename: 'img2.jpg', contentType: 'image/jpeg' });
+  const sendImagesToFlaskAPI = async (jogadores, player1ImagePath, player2ImagePath, roomId) => {
+    try {
+      console.log('plays',jogadores);
 
-    const response = await axios.post('https://d14b-34-19-101-237.ngrok-free.app/play', formData, {
-      headers: formData.getHeaders( ),
-    }); 
+      const formData = new FormData();
+      formData.append('images', fs.createReadStream(player1ImagePath), { filename: 'img1.jpg', contentType: 'image/jpeg' });
+      formData.append('images', fs.createReadStream(player2ImagePath), { filename: 'img2.jpg', contentType: 'image/jpeg' });
 
-    console.log(`Resultado: ${response.data.winner}`);
-    
-    // Realiza o replace com os nomes dos jogadores
-    const resultadoComNomes = response.data.winner
-      .replace('Player 1', jogadores[0])
-      .replace('Player 2', jogadores[1]);
+      const response = await axios.post('https://bc32-34-142-140-119.ngrok-free.app/play', formData, {
+        headers: formData.getHeaders(),
+      });
 
-    console.log(resultadoComNomes);
-    
-    io.to(roomId).emit("fim-partida", resultadoComNomes); // Emitir a mensagem de fim de partida
-  } catch (error) {
-    io.to(roomId).emit("fim-partida", error.response.status);
-    console.log(error.response.status)
-  }
-};
+      console.log(`Resultado: ${response.data.winner}`);
+
+      const resultadoComNomes = response.data.winner
+        .replace('Player 1', jogadores[0])
+        .replace('Player 2', jogadores[1]);
+
+      console.log(resultadoComNomes);
+      io.to(roomId).emit("fim-partida", resultadoComNomes);
+
+    } catch (error) {
+      console.error("Erro ao processar as imagens:", error.message);
+      io.to(roomId).emit("fim-partida", "Erro ao processar as imagens");
+
+    } finally {
+      // Deletar as imagens do servidor
+      if (fs.existsSync(player1ImagePath)) fs.unlinkSync(player1ImagePath); 
+      if (fs.existsSync(player2ImagePath)) fs.unlinkSync(player2ImagePath); 
+    }
+  };
 
   // Enviar e retransmitir mensagens na sala de chat
   socket.on("message", ({ roomId, content }) => {
